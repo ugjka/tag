@@ -16,12 +16,10 @@ func Sum(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	_, err = r.Seek(-11, io.SeekCurrent)
 	if err != nil {
 		return "", fmt.Errorf("could not seek back to original position: %v", err)
 	}
-
 	switch {
 	case string(b[0:4]) == "fLaC":
 		return SumFLAC(r)
@@ -105,7 +103,7 @@ func sizeToEndOffset(r io.ReadSeeker, offset int64) (int64, error) {
 		return 0, fmt.Errorf("error seeking end offset (%d bytes): %v", offset, err)
 	}
 
-	_, err = r.Seek(-n, io.SeekCurrent)
+	_, err = r.Seek(-n, io.SeekEnd)
 	if err != nil {
 		return 0, fmt.Errorf("error seeking back to original position: %v", err)
 	}
@@ -124,7 +122,22 @@ func SumID3v1(r io.ReadSeeker) (string, error) {
 	if n <= 0 {
 		return "", fmt.Errorf("file size must be greater than 128 bytes (ID3v1 header size) for MP3")
 	}
-
+	_, err = r.Seek(n, io.SeekStart)
+	if err != nil {
+		return "", fmt.Errorf("Could not seek to start")
+	}
+	buf := make([]byte, 3)
+	_, err = r.Read(buf)
+	if err != nil {
+		return "", fmt.Errorf("Could not read buf")
+	}
+	_, err = r.Seek(0, io.SeekStart)
+	if err != nil {
+		return "", fmt.Errorf("Could not seek to start")
+	}
+	if string(buf) != "TAG" {
+		return "", ErrNotID3v1
+	}
 	h := sha1.New()
 	_, err = io.CopyN(h, r, n)
 	if err != nil {
