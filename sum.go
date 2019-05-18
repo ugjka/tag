@@ -45,8 +45,13 @@ func Sum(r io.ReadSeeker) (string, error) {
 // SumAll returns a checksum of the content from the reader (until EOF).
 func SumAll(r io.ReadSeeker) (string, error) {
 	defer r.Seek(0, io.SeekStart)
+	n, err := r.Seek(0, io.SeekEnd)
+	if err != nil {
+		return "", err
+	}
+	apeOffset, _ := checkGoogleMusicApeTags(r, false)
 	h := sha1.New()
-	_, err := io.Copy(h, r)
+	_, err = io.CopyN(h, r, n-apeOffset)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +109,7 @@ func SumAtoms(r io.ReadSeeker) (string, error) {
 // by the io.ReadSeeker which is metadata invariant.
 func SumID3v1(r io.ReadSeeker) (string, error) {
 	defer r.Seek(0, io.SeekStart)
-	n, err := r.Seek(-128, io.SeekEnd)
+	_, err := r.Seek(-128, io.SeekEnd)
 	if err != nil {
 		return "", err
 	}
@@ -113,15 +118,16 @@ func SumID3v1(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = r.Seek(0, io.SeekStart)
-	if err != nil {
-		return "", err
-	}
 	if string(buf) != "TAG" {
 		return "", ErrNotID3v1
 	}
+	n, err := r.Seek(0, io.SeekEnd)
+	if err != nil {
+		return "", err
+	}
+	apeOffset, _ := checkGoogleMusicApeTags(r, true)
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n)
+	_, err = io.CopyN(h, r, n-apeOffset)
 	if err != nil {
 		return "", fmt.Errorf("error reading %v bytes: %v", n, err)
 	}
@@ -145,22 +151,59 @@ func SumID3v2(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	id3v1 := true
 	if string(buf) != "TAG" {
+		id3v1 = false
 		n, err = r.Seek(0, io.SeekEnd)
 		if err != nil {
 			return "", err
 		}
 	}
+	apeOffset, _ := checkGoogleMusicApeTags(r, id3v1)
 	_, err = r.Seek(int64(header.Size)+10, io.SeekStart)
 	if err != nil {
 		return "", err
 	}
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n-int64(header.Size)-10)
+	_, err = io.CopyN(h, r, n-int64(header.Size)-10-apeOffset)
 	if err != nil {
 		return "", fmt.Errorf("error reading %v bytes: %v", n, err)
 	}
 	return hashSum(h), nil
+}
+
+func checkGoogleMusicApeTags(r io.ReadSeeker, id3v1 bool) (offset int64, err error) {
+	defer r.Seek(0, io.SeekStart)
+	start := int64(-32)
+	if id3v1 {
+		start += -128
+	}
+	n, err := r.Seek(start, io.SeekEnd)
+	if err != nil {
+		return 0, err
+	}
+	n += 12
+	buf := make([]byte, 8)
+	_, err = r.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+	if string(buf) != "APETAGEX" {
+		return 0, fmt.Errorf("no google music ape tag found")
+	}
+	_, err = r.Seek(n, io.SeekStart)
+	if err != nil {
+		return 0, err
+	}
+	var len int32
+	err = binary.Read(r, binary.LittleEndian, &len)
+	if err != nil {
+		return 0, err
+	}
+	if id3v1 {
+		len += 128
+	}
+	return int64(len) + 32, nil
 }
 
 // SumFLAC costructs a checksum of the FLAC audio file data provided by the io.ReadSeeker (ignores
