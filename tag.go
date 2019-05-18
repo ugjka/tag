@@ -28,6 +28,7 @@ var ErrNoTagsFound = errors.New("no tags found")
 // Returns non-nil error if the format of the given data could not be determined, or if there was a problem
 // parsing the data.
 func ReadFrom(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	b, err := readBytes(r, 11)
 	if err != nil {
 		return nil, err

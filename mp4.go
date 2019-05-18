@@ -68,6 +68,7 @@ type metadataMP4 struct {
 // ReadAtoms reads MP4 metadata atoms from the io.ReadSeeker into a Metadata, returning
 // non-nil error if there was a problem.
 func ReadAtoms(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	m := metadataMP4{
 		data:     make(map[string]interface{}),
 		fileType: UnknownFileType,

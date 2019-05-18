@@ -12,6 +12,7 @@ import (
 // Sum creates a checksum of the audio file data provided by the io.ReadSeeker which is metadata
 // (ID3, MP4) invariant.
 func Sum(r io.ReadSeeker) (string, error) {
+	defer r.Seek(0, io.SeekStart)
 	b, err := readBytes(r, 11)
 	if err != nil {
 		return "", err
@@ -43,10 +44,11 @@ func Sum(r io.ReadSeeker) (string, error) {
 
 // SumAll returns a checksum of the content from the reader (until EOF).
 func SumAll(r io.ReadSeeker) (string, error) {
+	defer r.Seek(0, io.SeekStart)
 	h := sha1.New()
 	_, err := io.Copy(h, r)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	return hashSum(h), nil
 }
@@ -54,6 +56,7 @@ func SumAll(r io.ReadSeeker) (string, error) {
 // SumAtoms constructs a checksum of MP4 audio file data provided by the io.ReadSeeker which is
 // metadata invariant.
 func SumAtoms(r io.ReadSeeker) (string, error) {
+	defer r.Seek(0, io.SeekStart)
 	for {
 		var size uint32
 		err := binary.Read(r, binary.BigEndian, &size)
@@ -97,43 +100,22 @@ func SumAtoms(r io.ReadSeeker) (string, error) {
 	}
 }
 
-func sizeToEndOffset(r io.ReadSeeker, offset int64) (int64, error) {
-	n, err := r.Seek(-128, io.SeekEnd)
-	if err != nil {
-		return 0, fmt.Errorf("error seeking end offset (%d bytes): %v", offset, err)
-	}
-
-	_, err = r.Seek(-n, io.SeekEnd)
-	if err != nil {
-		return 0, fmt.Errorf("error seeking back to original position: %v", err)
-	}
-	return n, nil
-}
-
 // SumID3v1 constructs a checksum of MP3 audio file data (assumed to have ID3v1 tags) provided
 // by the io.ReadSeeker which is metadata invariant.
 func SumID3v1(r io.ReadSeeker) (string, error) {
-	n, err := sizeToEndOffset(r, 128)
+	defer r.Seek(0, io.SeekStart)
+	n, err := r.Seek(-128, io.SeekEnd)
 	if err != nil {
-		return "", fmt.Errorf("error determining read size to ID3v1 header: %v", err)
-	}
-
-	// TODO: improve this check???
-	if n <= 0 {
-		return "", fmt.Errorf("file size must be greater than 128 bytes (ID3v1 header size) for MP3")
-	}
-	_, err = r.Seek(n, io.SeekStart)
-	if err != nil {
-		return "", fmt.Errorf("Could not seek to start")
+		return "", err
 	}
 	buf := make([]byte, 3)
 	_, err = r.Read(buf)
 	if err != nil {
-		return "", fmt.Errorf("Could not read buf")
+		return "", err
 	}
 	_, err = r.Seek(0, io.SeekStart)
 	if err != nil {
-		return "", fmt.Errorf("Could not seek to start")
+		return "", err
 	}
 	if string(buf) != "TAG" {
 		return "", ErrNotID3v1
@@ -149,28 +131,32 @@ func SumID3v1(r io.ReadSeeker) (string, error) {
 // SumID3v2 constructs a checksum of MP3 audio file data (assumed to have ID3v2 tags) provided by the
 // io.ReadSeeker which is metadata invariant.
 func SumID3v2(r io.ReadSeeker) (string, error) {
+	defer r.Seek(0, io.SeekStart)
 	header, _, err := readID3v2Header(r)
 	if err != nil {
 		return "", fmt.Errorf("error reading ID3v2 header: %v", err)
 	}
-
-	_, err = r.Seek(int64(header.Size), io.SeekCurrent)
+	n, err := r.Seek(-128, io.SeekEnd)
 	if err != nil {
-		return "", fmt.Errorf("error seeking to end of ID3V2 header: %v", err)
+		return "", err
 	}
-
-	n, err := sizeToEndOffset(r, 128)
+	buf := make([]byte, 3)
+	_, err = r.Read(buf)
 	if err != nil {
-		return "", fmt.Errorf("error determining read size to ID3v1 header: %v", err)
+		return "", err
 	}
-
-	// TODO: remove this check?????
-	if n < 0 {
-		return "", fmt.Errorf("file size must be greater than 128 bytes for MP3: %v bytes", n)
+	if string(buf) != "TAG" {
+		n, err = r.Seek(0, io.SeekEnd)
+		if err != nil {
+			return "", err
+		}
 	}
-
+	_, err = r.Seek(int64(header.Size)+10, io.SeekStart)
+	if err != nil {
+		return "", err
+	}
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n)
+	_, err = io.CopyN(h, r, n-int64(header.Size)-10)
 	if err != nil {
 		return "", fmt.Errorf("error reading %v bytes: %v", n, err)
 	}
@@ -180,6 +166,7 @@ func SumID3v2(r io.ReadSeeker) (string, error) {
 // SumFLAC costructs a checksum of the FLAC audio file data provided by the io.ReadSeeker (ignores
 // metadata fields).
 func SumFLAC(r io.ReadSeeker) (string, error) {
+	defer r.Seek(0, io.SeekStart)
 	flac, err := readString(r, 4)
 	if err != nil {
 		return "", err
@@ -228,5 +215,5 @@ func skipFLACMetadataBlock(r io.ReadSeeker) (last bool, err error) {
 }
 
 func hashSum(h hash.Hash) string {
-	return fmt.Sprintf("%x", h.Sum([]byte{}))
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

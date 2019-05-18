@@ -13,6 +13,7 @@ import (
 // metadata in a Metadata implementation, or non-nil error if there was a problem.
 // samples: http://www.2l.no/hires/index.html
 func ReadDSFTags(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	dsd, err := readString(r, 4)
 	if err != nil {
 		return nil, err

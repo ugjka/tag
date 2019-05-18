@@ -7,6 +7,7 @@ import (
 
 // Identify identifies the format and file type of the data in the ReadSeeker.
 func Identify(r io.ReadSeeker) (format Format, fileType FileType, err error) {
+	defer r.Seek(0, io.SeekStart)
 	b, err := readBytes(r, 11)
 	if err != nil {
 		return

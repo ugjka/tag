@@ -19,6 +19,7 @@ const (
 // See http://www.xiph.org/vorbis/doc/Vorbis_I_spec.html
 // and http://www.xiph.org/ogg/doc/framing.html for details.
 func ReadOGGTags(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	oggs, err := readString(r, 4)
 	if err != nil {
 		return nil, err

@@ -281,7 +281,7 @@ func readID3v2Frames(r io.Reader, offset int, h *id3v2Header) (map[string]interf
 				if err != nil {
 					return nil, err
 				}
-				size -= 1
+				size--
 			}
 		}
 
@@ -391,6 +391,7 @@ func (r *unsynchroniser) Read(p []byte) (int, error) {
 // ReadID3v2Tags parses ID3v2.{2,3,4} tags from the io.ReadSeeker into a Metadata, returning
 // non-nil error on failure.
 func ReadID3v2Tags(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	h, offset, err := readID3v2Header(r)
 	if err != nil {
 		return nil, err

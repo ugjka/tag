@@ -26,6 +26,7 @@ const (
 // ReadFLACTags reads FLAC metadata from the io.ReadSeeker, returning the resulting
 // metadata in a Metadata implementation, or non-nil error if there was a problem.
 func ReadFLACTags(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	flac, err := readString(r, 4)
 	if err != nil {
 		return nil, err

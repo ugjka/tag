@@ -43,6 +43,7 @@ var ErrNotID3v1 = errors.New("invalid ID3v1 header")
 // ReadID3v1Tags reads ID3v1 tags from the io.ReadSeeker.  Returns ErrNotID3v1
 // if there are no ID3v1 tags, otherwise non-nil error if there was a problem.
 func ReadID3v1Tags(r io.ReadSeeker) (Metadata, error) {
+	defer r.Seek(0, io.SeekStart)
 	_, err := r.Seek(-128, io.SeekEnd)
 	if err != nil {
 		return nil, err
