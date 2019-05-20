@@ -49,9 +49,9 @@ func SumAll(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	apeOffset, _ := checkGoogleMusicApeTags(r, false)
+	apeLen, _ := checkGoogleMusicApeTags(r, false)
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n-apeOffset)
+	_, err = io.CopyN(h, r, n-apeLen)
 	if err != nil {
 		return "", err
 	}
@@ -125,9 +125,9 @@ func SumID3v1(r io.ReadSeeker) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	apeOffset, _ := checkGoogleMusicApeTags(r, true)
+	apeLen, _ := checkGoogleMusicApeTags(r, true)
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n-apeOffset)
+	_, err = io.CopyN(h, r, n-128-apeLen)
 	if err != nil {
 		return "", fmt.Errorf("error reading %v bytes: %v", n, err)
 	}
@@ -159,20 +159,20 @@ func SumID3v2(r io.ReadSeeker) (string, error) {
 			return "", err
 		}
 	}
-	apeOffset, _ := checkGoogleMusicApeTags(r, id3v1)
+	apeLen, _ := checkGoogleMusicApeTags(r, id3v1)
 	_, err = r.Seek(int64(header.Size)+10, io.SeekStart)
 	if err != nil {
 		return "", err
 	}
 	h := sha1.New()
-	_, err = io.CopyN(h, r, n-int64(header.Size)-10-apeOffset)
+	_, err = io.CopyN(h, r, n-int64(header.Size)-10-apeLen)
 	if err != nil {
 		return "", fmt.Errorf("error reading %v bytes: %v", n, err)
 	}
 	return hashSum(h), nil
 }
 
-func checkGoogleMusicApeTags(r io.ReadSeeker, id3v1 bool) (offset int64, err error) {
+func checkGoogleMusicApeTags(r io.ReadSeeker, id3v1 bool) (apeLen int64, err error) {
 	defer r.Seek(0, io.SeekStart)
 	start := int64(-32)
 	if id3v1 {
@@ -199,9 +199,6 @@ func checkGoogleMusicApeTags(r io.ReadSeeker, id3v1 bool) (offset int64, err err
 	err = binary.Read(r, binary.LittleEndian, &len)
 	if err != nil {
 		return 0, err
-	}
-	if id3v1 {
-		len += 128
 	}
 	return int64(len) + 32, nil
 }
